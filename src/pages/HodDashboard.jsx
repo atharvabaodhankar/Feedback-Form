@@ -45,7 +45,6 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import * as XLSX from "xlsx";
 import {
   FEEDBACK_QUESTIONS,
   INSTITUTION_QUESTIONS,
@@ -241,11 +240,20 @@ export default function HodDashboard({ user }) {
       setStudents(allFetchedStudents.filter((s) => s.department === user.dept));
       setStudentsLoaded(true);
 
-      // Fetch Feedbacks for Monitor & Reports
-      const feedQ = query(
-        collection(db, "Feedbacks"),
-        // Removed department filter to ensure older records without department field are fetched
-      );
+      // Fetch Feedbacks for Monitor & Reports — scoped to this department's staff
+      const deptStaffNames = activeStaff
+        .filter((s) => s.dept === user.dept)
+        .map((s) => s.name);
+
+      const feedQ = deptStaffNames.length > 0
+        ? query(
+            collection(db, "Feedbacks"),
+            where("staffName", "in", deptStaffNames.slice(0, 30)),
+          )
+        : query(
+            collection(db, "Feedbacks"),
+            where("department", "==", user.dept),
+          );
       const feedSnap = await getDocs(feedQ);
       const allFetchedFeedbacks = feedSnap.docs.map((d) => ({
         ...d.data(),
@@ -290,7 +298,6 @@ export default function HodDashboard({ user }) {
         id: d.id,
       }));
       setAllocations(fetchedAllocations);
-      console.log("Fetched allocations:", fetchedAllocations);
 
       const setSnap = await getDoc(doc(db, "Settings", "Global"));
       if (setSnap.exists()) {
@@ -454,6 +461,8 @@ export default function HodDashboard({ user }) {
     const file = e.target.files[0];
     if (!file) return;
     setIsSubmitting(true);
+    // Lazy-load xlsx only when needed — it's ~500KB
+    const XLSX = await import("xlsx");
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
@@ -887,18 +896,6 @@ export default function HodDashboard({ user }) {
       return matchSearch && matchClass && matchDiv;
     });
   }, [students, searchRollNo, filterClass, filterDivision]);
-
-  // Debug logging
-  console.log("Debug Info:", {
-    reportStaff,
-    reportSubject,
-    allocation,
-    totalStudentsInClass,
-    submittedStudents,
-    remainingStudents,
-    allocationsCount: allocations.length,
-    studentsCount: students.length,
-  });
 
   // For Exit Surveys, we need the specific form to get the custom questions array
   const activeExitForm =

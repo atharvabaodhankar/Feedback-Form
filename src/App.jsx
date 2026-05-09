@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -16,10 +16,12 @@ import {
 import ChangePasswordModal from "./components/ChangePasswordModal";
 import StudentLogin from "./pages/StudentLogin";
 import Login from "./pages/Login";
-import StudentDashboard from "./pages/StudentDashboard";
-import HodDashboard from "./pages/HodDashboard";
-import StaffDashboard from "./pages/StaffDashboard";
-import AdminDashboard from "./pages/AdminDashboard";
+
+// Lazy load heavy dashboards — only fetched when the user actually logs in
+const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
+const HodDashboard = lazy(() => import("./pages/HodDashboard"));
+const StaffDashboard = lazy(() => import("./pages/StaffDashboard"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 
 function readInitialSession() {
   try {
@@ -302,15 +304,17 @@ export default function App() {
               </nav>
 
               <main className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 md:py-8 pb-[max(3rem,env(safe-area-inset-bottom,0px))] print:p-0 print:m-0 print:max-w-none">
-                {user.role === "admin" && <AdminDashboard user={user} />}
-                {user.role === "student" && <StudentDashboard user={user} />}
-                {user.role === "hod" &&
-                  (viewMode === "hod" ? (
-                    <HodDashboard user={user} />
-                  ) : (
-                    <StaffDashboard user={user} />
-                  ))}
-                {user.role === "staff" && <StaffDashboard user={user} />}
+                <Suspense fallback={<div className="flex items-center justify-center py-20"><Loader2 size={36} className="animate-spin text-blue-500" /></div>}>
+                  {user.role === "admin" && <AdminDashboard user={user} />}
+                  {user.role === "student" && <StudentDashboard user={user} />}
+                  {user.role === "hod" &&
+                    (viewMode === "hod" ? (
+                      <HodDashboard user={user} />
+                    ) : (
+                      <StaffDashboard user={user} />
+                    ))}
+                  {user.role === "staff" && <StaffDashboard user={user} />}
+                </Suspense>
               </main>
 
               <ChangePasswordModal
